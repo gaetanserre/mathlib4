@@ -225,7 +225,8 @@ lemma Real.iter_deriv_sigmoid (n : ℕ) : deriv^[n] sigmoid = ∑ k ∈ range (n
   induction n with
   | zero => simp [stirlingSecond_self]
   | succ n ih =>
-    rw [add_comm n 1, Function.iterate_add]
+    nth_rw 1 [add_comm n 1]
+    rw [Function.iterate_add]
     simp only [iterate_one, comp_apply, ih]
     ext x
     rw [deriv_sum (by fun_prop)]
@@ -233,8 +234,7 @@ lemma Real.iter_deriv_sigmoid (n : ℕ) : deriv^[n] sigmoid = ∑ k ∈ range (n
     let c_n_k : ℕ → ℕ → ℝ := fun n k =>
       if k = 0 then a_n_k n 0
       else a_n_k n k * (k + 1) - a_n_k n (k - 1) * k
-    have : 1 + n + 1 = n + 2 := by ring
-    simp only [deriv_const_mul_field', sum_apply, this]
+    simp only [deriv_const_mul_field', sum_apply]
     calc
     _ = ∑ k ∈ range (n + 1), a_n_k n k * deriv (sigmoid ^ (k + 1)) x := by
       congr
@@ -264,7 +264,7 @@ lemma Real.iter_deriv_sigmoid (n : ℕ) : deriv^[n] sigmoid = ∑ k ∈ range (n
           g (n + 1) + ∑ k ∈ range (n + 1), g k := by
         simp only [↓reduceIte, zero_add, g]
         refine sum_congr rfl fun k hk => ?_
-        simp_all only [Nat.add_right_cancel_iff, mem_range, right_eq_ite_iff, cast_add, cast_one,
+        simp_all only [mem_range, right_eq_ite_iff, cast_add, cast_one,
           _root_.mul_eq_zero, ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, and_self,
           not_false_eq_true, pow_eq_zero_iff]
         intro _
