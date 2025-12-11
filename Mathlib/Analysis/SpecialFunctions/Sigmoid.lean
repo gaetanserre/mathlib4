@@ -11,6 +11,8 @@ public import Mathlib.Analysis.SpecialFunctions.ExpDeriv
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Mathlib.MeasureTheory.Constructions.Polish.EmbeddingReal
 public import Mathlib.Topology.Algebra.Module.ModuleTopology
+public import Mathlib.Combinatorics.Enumerative.Stirling
+public import Mathlib.Analysis.Calculus.Deriv.Pow
 
 /-!
 # Sigmoid function
@@ -32,6 +34,8 @@ that the composition of this embedding with the measurable embedding from a stan
 * `Real.tendsto_sigmoid_atTop` : the sigmoid function tends to `1` at `+∞`.
 * `Real.tendsto_sigmoid_atBot` : the sigmoid function tends to `0` at `-∞`.
 * `Real.hasDerivAt_sigmoid` : the derivative of the sigmoid function.
+* `Real.deriv_sigmoid` : formula for the derivative of the sigmoid function.
+* `Real.iter_deriv_sigmoid` : formula for the n-th derivative of the sigmoid function.
 * `Real.analyticAt_sigmoid` : the sigmoid function is analytic at every point.
 
 ### Sigmoid as a function from `ℝ` to `I`
@@ -144,6 +148,8 @@ lemma deriv_sigmoid : deriv sigmoid = fun x => sigmoid x * (1 - sigmoid x) :=
 
 end Real
 
+section AnalyticProperties
+
 open Set Real
 
 variable {x : ℝ} {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E] {f : E → ℝ} {s : Set E}
@@ -210,6 +216,145 @@ omit [NormedSpace ℝ E] in
 @[fun_prop]
 lemma Continuous.sigmoid (hf : Continuous f) : Continuous (sigmoid ∘ f) :=
   continuous_sigmoid.comp hf
+
+end AnalyticProperties
+
+open Nat Function Finset in
+lemma Real.iter_deriv_sigmoid (n : ℕ) : deriv^[n] sigmoid = ∑ k ∈ range (n + 1),
+    fun x => (-1)^k * k ! * (n + 1).stirlingSecond (k + 1) * (sigmoid x)^(k + 1) := by
+  induction n with
+  | zero => simp [stirlingSecond_self]
+  | succ n ih =>
+    rw [add_comm n 1, Function.iterate_add]
+    simp only [iterate_one, comp_apply, ih]
+    ext x
+    rw [deriv_sum (by fun_prop)]
+    let a_n_k : ℕ → ℕ → ℝ := fun n k => (-1) ^ k * k ! * (n + 1).stirlingSecond (k + 1)
+    let c_n_k : ℕ → ℕ → ℝ := fun n k =>
+      if k = 0 then a_n_k n 0
+      else a_n_k n k * (k + 1) - a_n_k n (k - 1) * k
+    have : 1 + n + 1 = n + 2 := by ring
+    simp only [deriv_const_mul_field', sum_apply, this]
+    calc
+    _ = ∑ k ∈ range (n + 1), a_n_k n k * deriv (sigmoid ^ (k + 1)) x := by
+      congr
+    _ = ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * deriv sigmoid x * x.sigmoid^k := by
+      congr with k
+      suffices deriv (sigmoid ^ (k + 1)) x = (k + 1) * x.sigmoid^k * deriv sigmoid x by
+        rw [this]
+        ring
+      rw [deriv_pow (by fun_prop)]
+      simp
+    _ = ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * (x.sigmoid^(k + 1) - x.sigmoid^(k + 2)) := by
+      congr with k
+      rw [deriv_sigmoid]
+      ring
+    _ = ∑ k ∈ range (n + 1), (a_n_k n k * (k + 1) * x.sigmoid^(k + 1) -
+          a_n_k n k * (k + 1) * x.sigmoid^(k + 2)) := by
+        congr with k
+        ring
+    _ = ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * x.sigmoid^(k + 1) -
+        ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * x.sigmoid^(k + 2) := sum_sub_distrib _ _
+    _ = ∑ k ∈ range (n + 2), c_n_k n k * x.sigmoid^(k + 1) := by
+      -- First sum transformation
+      let g : ℕ → ℝ := fun k =>
+        if k = n + 1 then 0
+        else a_n_k n k * (k + 1) * x.sigmoid ^ (k + 1)
+      have : ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * x.sigmoid ^ (k + 1) =
+          g (n + 1) + ∑ k ∈ range (n + 1), g k := by
+        simp only [↓reduceIte, zero_add, g]
+        refine sum_congr rfl fun k hk => ?_
+        simp_all only [Nat.add_right_cancel_iff, mem_range, right_eq_ite_iff, cast_add, cast_one,
+          _root_.mul_eq_zero, ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, and_self,
+          not_false_eq_true, pow_eq_zero_iff]
+        intro _
+        linarith
+      rw [this]
+      clear this
+      rw [← Finset.sum_insert notMem_range_self]
+      have : insert (n + 1) (range (n + 1)) = range (n + 2) := by
+        grind
+      rw [this]
+      clear this
+      -- Second sum transformation
+      let m : ℕ ↪ ℕ := ⟨fun n => n + 1, by simp [Injective]⟩
+      let f : ℕ → ℝ := fun k =>
+        if k = 0 then 0
+        else a_n_k n (k - 1) * k * x.sigmoid ^ (k + 1)
+      have : ∑ k ∈ range (n + 1), a_n_k n k * (k + 1) * x.sigmoid ^ (k + 2) =
+          ∑ k ∈ range (n + 1), f (m k) := by
+        congr with k
+        simp [m, f]
+      rw [this, ← Finset.sum_map]
+      clear this
+      have : ∑ k ∈ map m (range (n + 1)), f k = f 0 + ∑ k ∈ map m (range (n + 1)), f k := by
+        simp [f]
+      rw [this]
+      clear this
+      rw [← Finset.sum_insert (by simp [m])]
+      have : insert 0 (map m (range (n + 1))) = range (n + 2) := by
+        ext a
+        simp only [mem_insert, mem_map, mem_range]
+        constructor
+        · rintro (h | ⟨b, hb, h⟩)
+          · simp [h]
+          · rw [← h]
+            exact b.add_lt_add_right hb 1
+        · intro h
+          by_cases h0 : a = 0
+          · left; exact h0
+          right
+          refine ⟨a - 1, ?_, ?_⟩
+          · exact sub_one_lt_of_le (zero_lt_of_ne_zero h0) (le_of_lt_succ h)
+          · exact succ_pred_eq_of_ne_zero h0
+      rw [this, ← sum_sub_distrib]
+      clear this
+      -- Combining both transformations
+      refine sum_congr rfl fun k hk => ?_
+      simp [g, f, c_n_k]
+      by_cases h : k = 0
+      · simp [h]
+      by_cases h' : k = n + 1
+      · simp only [h', ↓reduceIte, Nat.add_eq_zero_iff, one_ne_zero,
+        and_false, add_tsub_cancel_right, cast_add, cast_one, zero_sub]
+        have : a_n_k n (n + 1) = 0 := by
+          simp only [a_n_k]
+          rw [stirlingSecond_eq_zero_of_lt (lt_add_one _)]
+          simp
+        simp [this]
+      simp only [h', ↓reduceIte, h]
+      ring
+    _ = ∑ k ∈ range (n + 2), a_n_k (n + 1) k * (sigmoid x)^(k + 1) := by
+      congr with k
+      congr
+      simp only [a_n_k, c_n_k]
+      by_cases h : k = 0
+      · simp_all [stirlingSecond_one_right]
+      simp only [h, ↓reduceIte]
+      calc
+      _ = (-1 : ℝ) ^ k * k ! * (n + 1).stirlingSecond (k + 1) * (k + 1) -
+          (-1) ^ (k - 1) * (k - 1)! * (n + 1).stirlingSecond k * k := by
+        rw [← ne_eq, ← one_le_iff_ne_zero] at h
+        rw [k.sub_add_cancel h]
+      _ = (-1 : ℝ) ^ k * k ! * (n + 1).stirlingSecond (k + 1) * (k + 1) -
+          (-1) ^ (k - 1) * (k * (k - 1)!) * (n + 1).stirlingSecond k := by ring
+      _ = (-1 : ℝ) ^ k * k ! * (n + 1).stirlingSecond (k + 1) * (k + 1) -
+          (-1) ^ (k - 1) * k ! * (n + 1).stirlingSecond k := by
+        suffices (k : ℝ) * ((k - 1)! : ℝ) = (k ! : ℝ) by
+          rw [this]
+        norm_cast
+        rw [mul_factorial_pred h]
+      _ = (-1 : ℝ) ^ k * k ! * (n + 1).stirlingSecond (k + 1) * (k + 1) -
+          (-1) ^ k * (-1) * k ! * (n + 1).stirlingSecond k := by
+        congr
+        rw [← ne_eq, ← one_le_iff_ne_zero] at h
+        rw [← k.sub_add_cancel h, pow_succ]
+        grind
+      _ = (-1 : ℝ) ^ k * k ! * ((k + 1) * (n + 1).stirlingSecond (k + 1) +
+          (n + 1).stirlingSecond k) := by ring
+      _ = (-1) ^ k * k ! * (n + 1 + 1).stirlingSecond (k + 1) := by
+        congr
+        norm_cast
 
 namespace unitInterval
 
