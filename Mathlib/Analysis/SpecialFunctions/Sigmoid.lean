@@ -423,12 +423,12 @@ lemma Topology.isEmbedding_sigmoid : IsEmbedding unitInterval.sigmoid :=
   OrderEmbedding.sigmoid.isEmbedding_of_ordConnected (ordConnected_of_Ioo <|
     fun a _ b _ _ => unitInterval.range_sigmoid ▸ Ioo_subset_Ioo a.2.1 b.2.2)
 
-lemma measurableEmbedding_sigmoid : MeasurableEmbedding unitInterval.sigmoid :=
+lemma MeasureTheory.measurableEmbedding_sigmoid : MeasurableEmbedding unitInterval.sigmoid :=
   Topology.isEmbedding_sigmoid.measurableEmbedding <| unitInterval.range_sigmoid ▸ measurableSet_Ioo
 
 variable (α : Type*) [MeasurableSpace α] [StandardBorelSpace α]
 
-lemma measurableEmbedding_sigmoid_comp_embeddingReal :
+lemma MeasureTheory.measurableEmbedding_sigmoid_comp_embeddingReal :
     MeasurableEmbedding (unitInterval.sigmoid ∘ MeasureTheory.embeddingReal α) :=
   measurableEmbedding_sigmoid.comp (MeasureTheory.measurableEmbedding_embeddingReal α)
 
