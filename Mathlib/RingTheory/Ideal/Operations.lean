@@ -207,7 +207,7 @@ section CommSemiring
 
 variable [CommSemiring R] [AddCommMonoid M] [Module R M] [AddCommMonoid M'] [Module R M']
 
-open Pointwise
+open scoped Pointwise
 
 variable {I : Ideal R} {N : Submodule R M}
 
@@ -231,7 +231,7 @@ theorem mem_of_span_eq_top_of_smul_pow_mem (M' : Submodule R M) (s : Set R) (hs 
   rintro ⟨_, r, hr, rfl⟩
   exact hf r
 
-open Pointwise in
+open scoped Pointwise in
 @[simp]
 theorem map_pointwise_smul (r : R) (N : Submodule R M) (f : M →ₗ[R] M') :
     (r • N).map f = r • N.map f := by
@@ -395,17 +395,7 @@ protected theorem pow_succ : I ^ (n + 1) = I * I ^ n := by
 
 end IsTwoSided
 
-@[simp]
-theorem mul_eq_bot [NoZeroDivisors R] : I * J = ⊥ ↔ I = ⊥ ∨ J = ⊥ :=
-  ⟨fun hij =>
-    or_iff_not_imp_left.mpr fun I_ne_bot =>
-      J.eq_bot_iff.mpr fun j hj =>
-        let ⟨i, hi, ne0⟩ := I.ne_bot_iff.mp I_ne_bot
-        Or.resolve_left (mul_eq_zero.mp ((I * J).eq_bot_iff.mp hij _ (mul_mem_mul hi hj))) ne0,
-    fun h => by obtain rfl | rfl := h; exacts [bot_mul _, mul_bot _]⟩
-
-instance [NoZeroDivisors R] : NoZeroDivisors (Ideal R) where
-  eq_zero_or_eq_zero_of_mul_eq_zero := mul_eq_bot.1
+theorem mul_eq_bot [NoZeroDivisors R] : I * J = ⊥ ↔ I = ⊥ ∨ J = ⊥ := Submodule.mul_eq_bot
 
 instance {S A : Type*} [Semiring S] [SMul R S] [AddCommMonoid A] [Module R A] [Module S A]
     [IsScalarTower R S A] [IsTorsionFree R A] {I : Submodule S A} : IsTorsionFree R I :=
@@ -761,8 +751,6 @@ theorem _root_.IsCoprime.exists (h : IsCoprime I J) : ∃ i ∈ I, ∃ j ∈ J, 
 
 theorem _root_.IsCoprime.sup_eq (h : IsCoprime I J) : I ⊔ J = ⊤ := isCoprime_iff_sup_eq.mp h
 
-theorem inf_eq_mul_of_isCoprime (coprime : IsCoprime I J) : I ⊓ J = I * J :=
-  (Ideal.mul_eq_inf_of_coprime coprime.sup_eq).symm
 
 theorem isCoprime_span_singleton_iff (x y : R) :
     IsCoprime (span <| singleton x) (span <| singleton y) ↔ IsCoprime x y := by
@@ -776,6 +764,27 @@ theorem isCoprime_biInf {J : ι → Ideal R} {s : Finset ι}
     (hf : ∀ j ∈ s, IsCoprime I (J j)) : IsCoprime I (⨅ j ∈ s, J j) := by
   simp only [isCoprime_iff_add, one_eq_top] at hf ⊢
   exact sup_iInf_eq_top hf
+
+-- TODO: Deprecate `Ideal.mul_eq_inf_of_coprime` in favor of this lemma.
+theorem mul_eq_inf_of_isCoprime (coprime : IsCoprime I J) : I * J = I ⊓ J :=
+  (Ideal.mul_eq_inf_of_coprime coprime.sup_eq)
+
+@[deprecated mul_eq_inf_of_isCoprime (since := "2026-03-10")]
+theorem inf_eq_mul_of_isCoprime (coprime : IsCoprime I J) : I ⊓ J = I * J :=
+  (Ideal.mul_eq_inf_of_coprime coprime.sup_eq).symm
+
+open Function
+theorem prod_eq_iInf_of_pairwise_isCoprime {s : Finset ι} {J : ι → Ideal R}
+    (hp : (s : Set ι).Pairwise (IsCoprime on J)) :
+    ∏ i ∈ s, J i = ⨅ i ∈ s, J i := by
+  classical
+  induction s using Finset.induction with
+  | empty => simp
+  | insert a s hs ih =>
+    simp_all only [Finset.iInf_insert, Finset.coe_insert, Set.pairwise_insert, SetLike.mem_coe,
+      ne_eq, not_false_eq_true, Finset.prod_insert, forall_const]
+    obtain ⟨hp1, hp2⟩ := hp
+    rw [Ideal.mul_eq_inf_of_isCoprime (isCoprime_biInf (by grind))]
 
 /-- The radical of an ideal `I` consists of the elements `r` such that `r ^ n ∈ I` for some `n`. -/
 def radical (I : Ideal R) : Ideal R where
@@ -845,11 +854,15 @@ theorem mem_radical_of_pow_mem {I : Ideal R} {x : R} {m : ℕ} (hx : x ^ m ∈ r
   radical_idem I ▸ ⟨m, hx⟩
 
 theorem disjoint_powers_iff_notMem (y : R) (hI : I.IsRadical) :
-    Disjoint (Submonoid.powers y : Set R) ↑I ↔ y ∉ I.1 := by
+    Disjoint (Submonoid.powers y : Set R) ↑I ↔ y ∉ I := by
   refine ⟨fun h => Set.disjoint_left.1 h (Submonoid.mem_powers _),
       fun h => disjoint_iff.mpr (eq_bot_iff.mpr ?_)⟩
   rintro x ⟨⟨n, rfl⟩, hx'⟩
   exact h (hI <| mem_radical_of_pow_mem <| le_radical hx')
+
+theorem disjoint_powers_iff_notMem_of_isPrime [I.IsPrime] (y : R) :
+    Disjoint (Submonoid.powers y : Set R) ↑I ↔ y ∉ I :=
+  disjoint_powers_iff_notMem y (IsPrime.isRadical ‹_›)
 
 variable (I J)
 
@@ -1175,9 +1188,8 @@ theorem subset_union_prime {R : Type u} [CommRing R] {s : Finset ι} {f : ι →
         rw [Finset.coe_insert, Set.biUnion_insert, ← Set.union_self (f b : Set R),
           subset_union_prime' hp', ← or_assoc, or_self_iff] at h
         rwa [Finset.exists_mem_insert]
-      rcases s.eq_empty_or_nonempty with hse | hsne
-      · subst hse
-        rw [Finset.coe_empty, Set.biUnion_empty] at h
+      rcases s.eq_empty_or_nonempty with rfl | hsne
+      · rw [Finset.coe_empty, Set.biUnion_empty] at h
         exact (h I.zero_mem).elim
       · obtain ⟨i, his⟩ := hsne
         obtain ⟨t, _, rfl⟩ : ∃ t, i ∉ t ∧ insert i t = s :=
@@ -1361,8 +1373,11 @@ theorem Ideal.primeCompl_le_nonZeroDivisors {R : Type*} [CommSemiring R] [NoZero
 
 namespace Submodule
 
-variable {R : Type u} {M : Type v}
-variable [CommSemiring R] [AddCommMonoid M] [Module R M]
+variable {R : Type*}
+
+section
+
+variable [CommSemiring R] {M : Type*} [AddCommMonoid M] [Module R M]
 
 instance moduleSubmodule : Module (Ideal R) (Submodule R M) where
   smul_add := smul_sup
@@ -1418,6 +1433,20 @@ instance algebraIdeal : Algebra (Ideal R) (Submodule R A) where
     (congr_arg (map · I) <| LinearMap.ext (f.left_inv ·)).trans (map_id I)
   right_inv I := (map_comp _ _ I).symm.trans <|
     (congr_arg (map · I) <| LinearMap.ext (f.right_inv ·)).trans (map_id I)
+
+end
+
+variable [Semiring R] {M N : Type*}
+
+lemma smul_top_le_comap_smul_top [AddCommMonoid M] [AddCommMonoid N] [Module R M] [Module R N]
+    (I : Ideal R) (f : M →ₗ[R] N) : I • ⊤ ≤ comap f (I • ⊤) :=
+  map_le_iff_le_comap.mp <| le_of_eq_of_le (map_smul'' _ _ _) <|
+    smul_mono_right _ le_top
+
+lemma comap_smul_top_of_surjective [AddCommGroup M] [AddCommGroup N] [Module R M] [Module R N]
+    (I : Ideal R) (f : M →ₗ[R] N) (h : Function.Surjective f) :
+    comap f (I • ⊤) = I • ⊤ ⊔ (LinearMap.ker f) := by
+  rw [← Submodule.comap_map_eq f, Submodule.map_smul'', map_top, LinearMap.range_eq_top.mpr h]
 
 end Submodule
 
